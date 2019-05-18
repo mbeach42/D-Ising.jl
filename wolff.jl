@@ -1,6 +1,6 @@
 function createcluster!(ising::Ising, site::CartesianIndex, spin_val::Int)
     ising.cluster[site] = true
-    ising.spins[site] = spin_val
+    ising.spins[site] = -spin_val
 
     for nn_table in ising.neighbours_table 
         new_site = nn_table[site]

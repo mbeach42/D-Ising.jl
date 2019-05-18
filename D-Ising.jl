@@ -1,6 +1,6 @@
 using BenchmarkTools
 using Random
-Random.seed!(42)
+include("wolff.jl")
 
 struct Ising{D, T <: AbstractFloat}
     dims::Dims{D}
@@ -41,7 +41,7 @@ function Ising(dims::Dims{D}; h::Real=0, β::Real=5) where D
 end
 
 function energy_singleflip(ising::Ising, site::CartesianIndex)
-    E = 0.0
+    E = 0
     for nn_table in ising.neighbours_table 
         new_site = nn_table[site]
         if ising.spins[site] ≡ ising.spins[new_site]
@@ -50,13 +50,14 @@ function energy_singleflip(ising::Ising, site::CartesianIndex)
             E -= 1
         end
     end
+    E -= ising.h * ising.spins[site] 
     return 2E
 end
 
 function metropolis_step!(ising::Ising)
     rand_site = rand(ising.sites)
     dE = energy_singleflip(ising, rand_site)
-    if dE < 0 || rand() < exp(-dE*ising.β)
+    if dE < 0 || rand() < exp(-ising.β * dE)
         ising.spins[rand_site] *= -1
     end
 end
@@ -66,12 +67,9 @@ magnetization(ising::Ising) = abs(sum(ising.spins))
 function energy(ising::Ising)
     E = 0
     for site in ising.sites
-        for nn_table in ising.neighbours_table 
-            new_site = nn_table[site]
-            E += ising.spins[site] * ising.spins[new_site]
-        end
+        E += energy_singleflip(ising, site)
     end
-    return E
+    return E/2
 end
 
 function update_observables!(ising::Ising, observables::Observables)
@@ -83,32 +81,22 @@ function metropolis_sweep!(ising::Ising, observables::Observables)
     for site in eachindex(ising.spins)
         metropolis_step!(ising)
     end
-    update_observables!(ising, observables)
 end
 
 function run!(ising::Ising, observables::Observables, N::Int)
-    for i in 1:N # warmup
-        for site in eachindex(ising.spins)
-            metropolis_step!(ising)
-        end
-    end
-    for i in 1:N
+    for i in 1:2N
         metropolis_sweep!(ising, observables)
+        wolff!(ising)
+        if i > N
+            update_observables!(ising, observables)
+        end
     end
 end
 
 
-N = 1000
-dims = (10, 10)
-ising = Ising(dims, h=0, β=10.0)
-observables = Observables()
-run!(ising, observables, 1)
-
-@time run!(ising, observables, N)
-println("E is ", observables.E/N/prod(dims))
-println("M is ", observables.M/N/prod(dims))
-
-ising = Ising((4, 4), h=0, β=1/(5.0))
+N = 5000
+dims = (40, 40)
+ising = Ising(dims, h=0., β=1.0)
 observables = Observables()
 run!(ising, observables, 1)
 
