@@ -41,7 +41,7 @@ function Ising(dims::Dims{D}; h::Real=0, β::Real=5) where D
 end
 
 function energy_singleflip(ising::Ising, site::CartesianIndex)
-    E = 0
+    E = 0.0
     for nn_table in ising.neighbours_table 
         new_site = nn_table[site]
         if ising.spins[site] ≡ ising.spins[new_site]
@@ -54,11 +54,9 @@ function energy_singleflip(ising::Ising, site::CartesianIndex)
 end
 
 function metropolis_step!(ising::Ising)
-    rand_site= rand(ising.sites)
+    rand_site = rand(ising.sites)
     dE = energy_singleflip(ising, rand_site)
-    if dE < 0 
-        ising.spins[rand_site] *= -1
-    elseif rand() < exp(-dE)
+    if dE < 0 || rand() < exp(-dE*ising.β)
         ising.spins[rand_site] *= -1
     end
 end
@@ -89,14 +87,31 @@ function metropolis_sweep!(ising::Ising, observables::Observables)
 end
 
 function run!(ising::Ising, observables::Observables, N::Int)
+    for i in 1:N # warmup
+        for site in eachindex(ising.spins)
+            metropolis_step!(ising)
+        end
+    end
     for i in 1:N
         metropolis_sweep!(ising, observables)
     end
 end
 
 
-ising = Ising((40, 40))
+N = 1000
+dims = (10, 10)
+ising = Ising(dims, h=0, β=10.0)
 observables = Observables()
 run!(ising, observables, 1)
 
-@btime run!(ising, observables, 5000)
+@time run!(ising, observables, N)
+println("E is ", observables.E/N/prod(dims))
+println("M is ", observables.M/N/prod(dims))
+
+ising = Ising((4, 4), h=0, β=1/(5.0))
+observables = Observables()
+run!(ising, observables, 1)
+
+@time run!(ising, observables, N)
+println("E is ", observables.E/N/prod(dims))
+println("M is ", observables.M/N/prod(dims))
