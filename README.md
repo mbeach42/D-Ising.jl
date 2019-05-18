@@ -4,4 +4,4 @@ This is the simplest implimentation of the classical nearest-neighbours Ising mo
 
 100 lines of code to get the energy & magnetization for D-dimensional Ising model with speeds comparable to C++. 
 
-Also Wolff cluster updates are implimented (not tested).
+Also Wolff cluster updates are implimented (extra 20 loc). 
