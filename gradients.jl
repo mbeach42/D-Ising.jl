@@ -3,14 +3,14 @@ using BenchmarkTools
 
 # include("wolff.jl")
 
-struct Ising{D, T}
+struct Ising{D, T <: AbstractFloat}
     dims::Dims{D}
-    h::Float64
-    β::Float64
+    h::T
+    β::T
     spins::Array{Int, D}
     cluster::Array{Bool, D}
     sites::Array{CartesianIndex{D},D}
-    neighbours_table::Array{CartesianIndex{D},T}
+    neighbours_table::Vector{Array{CartesianIndex{D},D}}
 end
 Base.size(ising::Ising) = ising.dims
 Base.length(ising::Ising) = prod(ising.dims)
@@ -38,22 +38,29 @@ function Ising(dims::Dims{D}; h::Real=0, β::Real=5) where D
     for j in 2:D
         append!(neighbours_table, [circshift(sites, unit_tuple(D, j, i)) for i in -1:2:1])
     end
-    neighbours_table = cat(neighbours_table..., dims=D+1)
-    Ising{D,D+1}(dims, h, β, spins, cluster, sites, neighbours_table)
+    Ising{D, Float64}(dims, h, β, spins, cluster, sites, neighbours_table)
 end
 
-function energy_singleflip(ising::Ising, site::CartesianIndex{D}) where D
+function energy_singleflip(ising::Ising, site::CartesianIndex, h::Real)
     E = 0
-    for n in 1:2D
-        new_site = ising.neighbours_table[site, n]
+    for nn_table in ising.neighbours_table 
+        new_site = nn_table[site]
         if ising.spins[site] ≡ ising.spins[new_site]
             E += 1
         else
             E -= 1
         end
     end
-    E -= ising.h * ising.spins[site] 
+    E -= h * ising.spins[site] 
     return 2E
+end
+
+function energy(ising::Ising, h::Real)
+    E = 0
+    for site in ising.sites
+        E += energy_singleflip(ising, site, h)
+    end
+    return E/2
 end
 
 function metropolis_step!(ising::Ising)
@@ -65,15 +72,6 @@ function metropolis_step!(ising::Ising)
 end
 
 magnetization(ising::Ising) = abs(sum(ising.spins))
-
-function energy(ising::Ising)
-    E = 0
-    for site in ising.sites
-        E += energy_singleflip(ising, site)
-    end
-    return E/2
-end
-
 function update_observables!(ising::Ising, observables::Observables)
     observables.E += energy(ising)
     observables.M += magnetization(ising)
@@ -96,27 +94,22 @@ function run!(ising::Ising, observables::Observables, N::Int)
 end
 
 
-N = 5000
-dims = (40,40)
+# N = 5000
+dims = (24, 13)
 ising = Ising(dims, h=0., β=1.0)
-observables = Observables()
-run!(ising, observables, 1)
-@time run!(ising, observables, N)
-println("E is ", observables.E/N/prod(dims))
-println("M is ", observables.M/N/prod(dims))
+# observables = Observables()
+# run!(ising, observables, 1)
 
-N = 5000
-dims = (10, 10, 10, 5)
-ising = Ising(dims, h=0., β=1.0)
-observables = Observables()
-run!(ising, observables, 1)
-@time run!(ising, observables, N)
-println("E is ", observables.E/N/prod(dims))
-println("M is ", observables.M/N/prod(dims))
+# @time run!(ising, observables, N)
+# println("E is ", observables.E/N/prod(dims))
+# println("M is ", observables.M/N/prod(dims))
 
-# display(ising.spins)
-# display(sum(ising.spins))
-# @btime sum(ising.spins)
+display(ising.spins)
+display(sum(ising.spins))
+@btime sum(ising.spins)
 
-# g = x -> ForwardDiff.gradient(h -> energy(ising, h[]), x)
-# @btime g([1])
+g = x -> ForwardDiff.gradient(h -> energy(ising, h[]), x)
+@btime g([1])
+
+G = x -> ForwardDiff.gradient(h -> energy(ising, h[]), x)
+@btime G([1])
